@@ -1,0 +1,26 @@
+const names=['Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'];
+const morningWeek=['06:30 Uhr aufstehen','Bett machen','Lüften','Zähne putzen','Anziehen','Ab 07:00 Uhr Medikamente','Frühstücken','08:00 Uhr Umschulung'];
+const eveningWeek=[['Abendessen','Duschen','Danach freie Gestaltung','21:30 Uhr Medikamente','Zähne putzen','Spätestens um 23:00 Uhr ins Bett'],['Abendessen','Freizeit / freie Gestaltung','21:30 Uhr Medikamente','Zähne putzen','Spätestens um 23:00 Uhr ins Bett'],['Abendessen','Duschen + Hygieneroutine','Danach freie Gestaltung','21:30 Uhr Medikamente','Zähne putzen','Spätestens um 23:00 Uhr ins Bett'],['Abendessen','Freizeit / freie Gestaltung','21:30 Uhr Medikamente','Zähne putzen','Spätestens um 23:00 Uhr ins Bett'],['Abendessen','Duschen','Danach freie Gestaltung','21:30 Uhr Medikamente','Zähne putzen','Spätestens um 23:00 Uhr ins Bett']];
+const middleWeek=[['Blockpausen: Lernen oder Freizeit (frei wählbar)','Aufräumen','Wäsche waschen'],['Blockpausen: Lernen oder Freizeit (frei wählbar)','Einkaufen','Einkauf ausräumen (zusammen)'],['Blockpausen: Lernen oder Freizeit (frei wählbar)','Kochen + aufräumen','GYM'],['Blockpausen: Lernen oder Freizeit (frei wählbar)','Staub wischen','Fegen / saugen','Oberflächen reinigen'],['Blockpausen: Lernen oder Freizeit (frei wählbar)','Wäsche waschen','GYM']];
+const morningEnd=['Spätestens 09:00 Uhr aufstehen','Bett machen','Lüften','Zähne putzen','Anziehen','Medikamente nach dem Aufstehen','Frühstücken'];
+const data=names.map((_,i)=>i<5?{MORGENS:morningWeek,MITTAGS:middleWeek[i],ABENDS:eveningWeek[i]}:{MORGENS:morningEnd,MITTAGS:i===5?['Staub wischen, fegen, wischen + Oberflächen reinigen (zusammen)','Kochen freestylen + aufräumen (zusammen)','Freizeit / freie Gestaltung']:['Müll + Mülltonne','Aufräumen nach Ennas Kochen','Spiegel reinigen','Finanztalk','Am 1. Sonntag im Monat: Schränke + Unterlagen sortieren','Freizeit / freie Gestaltung'],ABENDS:i===5?['Abendessen','Freizeit / freie Gestaltung','21:30 Uhr Medikamente','Zähne putzen']:['Abendessen','Duschen + Haare waschen / Hygieneroutine','Danach freie Gestaltung','21:30 Uhr Medikamente','Zähne putzen']});
+let day=(()=>{const d=period();const [y,m,dd]=d.split('-').map(Number);return (new Date(Date.UTC(y,m-1,dd)).getUTCDay()+6)%7})();
+let group=day<5?'weekday':'weekend';
+function berlinNow(){let parts=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Berlin',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date()).filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));return parts;}
+function period(){const p=berlinNow();let date=new Date(`${p.year}-${p.month}-${p.day}T12:00:00Z`);if(Number(p.hour)<6||(Number(p.hour)===6&&Number(p.minute)<30))date.setUTCDate(date.getUTCDate()-1);return date.toISOString().slice(0,10)}
+function selectedDate(){
+  const [y,m,d]=period().split('-').map(Number);
+  const base=new Date(Date.UTC(y,m-1,d,12));
+  const weekday=(base.getUTCDay()+6)%7;
+  base.setUTCDate(base.getUTCDate()-weekday+day);
+  return base.toISOString().slice(0,10);
+}
+function key(){return 'retro86:v2:'+selectedDate()}
+function read(){try{return JSON.parse(localStorage.getItem(key())||'{}')}catch{return {}}}
+function chooseGroup(g){group=g;if(g==='weekday'&&day>4)day=0;if(g==='weekend'&&day<5)day=5;render()}
+function chooseDay(i){day=i;group=i<5?'weekday':'weekend';render()}
+function toggle(id,val){let s=read();s[id]=val;localStorage.setItem(key(),JSON.stringify(s));progress()}
+function resetCurrent(){if(confirm('Alle Häkchen für '+names[day]+' zurücksetzen?')){localStorage.removeItem(key());render()}}
+function progress(){const s=read(),total=Object.values(data[day]).reduce((n,arr)=>n+arr.length,0),done=Object.values(s).filter(Boolean).length;document.getElementById('count').textContent=`${done} / ${total}`;document.getElementById('bar').style.width=(done/total*100)+'%'}
+function render(){document.getElementById('date').textContent=names[day]+' · '+selectedDate().split('-').reverse().join('.');for(const g of ['weekday','weekend'])document.getElementById(g).classList.toggle('active',g===group);const nav=document.getElementById('days');nav.replaceChildren();names.forEach((name,i)=>{if((i<5)!==(group==='weekday'))return;let b=document.createElement('button');b.textContent=name;b.className=day===i?'active':'';b.onclick=()=>chooseDay(i);nav.append(b)});const main=document.getElementById('tasks');main.replaceChildren();let s=read();Object.entries(data[day]).forEach(([period,items])=>{let section=document.createElement('section'),heading=document.createElement('h2');heading.textContent=period;section.append(heading);items.forEach((t,i)=>{const id=period+':'+i,lab=document.createElement('label'),check=document.createElement('input'),span=document.createElement('span');lab.className='task';check.type='checkbox';check.checked=!!s[id];check.onchange=()=>toggle(id,check.checked);span.textContent=t;lab.append(check,span);section.append(lab)});main.append(section)});progress()}
+let last=period();setInterval(()=>{if(period()!==last){last=period();render()}},15000);render();if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
